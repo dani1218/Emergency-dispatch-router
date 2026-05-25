@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emergency Dispatch Router</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --red:    #E63946;
+  --red-dk: #b02530;
+  --amber:  #F4A261;
+  --green:  #2A9D8F;
+  --blue:   #457B9D;
+  --navy:   #0d1b2a;
+  --panel:  #111827;
+  --panel2: #1a2535;
+  --border: rgba(255,255,255,0.07);
+  --text:   #e8edf2;
+  --muted:  #6b7a8d;
+  --mono:   'Space Mono', monospace;
+  --sans:   'DM Sans', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--sans);
+  background: var(--navy);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header ── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 56px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 10;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--red);
+}
+.logo svg { width: 22px; height: 22px; }
+.header-tags { display: flex; gap: 8px; }
+.tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.tag.active { border-color: var(--green); color: var(--green); }
+
+/* ── Layout ── */
+.workspace {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-section {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.section-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.control-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.control-row label { font-size: 12px; color: var(--muted); }
+select, input[type=number] {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  padding: 8px 10px;
+  width: 100%;
+  outline: none;
+  appearance: none;
+}
+select:focus, input:focus { border-color: var(--red); }
+
+.btn-dispatch {
+  width: 100%;
+  padding: 11px;
+  background: var(--red);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn-dispatch:hover { background: var(--red-dk); }
+.btn-dispatch:active { transform: scale(0.98); }
+.btn-dispatch:disabled { background: #333; color: var(--muted); cursor: not-allowed; }
+
+.blocked-list {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--amber);
+  min-height: 20px;
+  margin-top: 4px;
+}
+
+/* ── Results panel ── */
+.results-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px;
+}
+.results-panel::-webkit-scrollbar { width: 4px; }
+.results-panel::-webkit-scrollbar-thumb { background: var(--border); }
+
+.result-card {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.result-card:hover { border-color: rgba(255,255,255,0.2); }
+.result-card.best { border-color: var(--green); }
+.result-card.selected { border-color: var(--blue); }
+.rc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.rc-name { font-size: 13px; font-weight: 600; }
+.rc-badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: var(--green);
+  color: white;
+  display: none;
+}
+.result-card.best .rc-badge { display: block; }
+.rc-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.rc-stat { background: rgba(0,0,0,0.3); border-radius: 5px; padding: 6px 8px; }
+.rc-stat-label { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+.rc-stat-val { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+.rc-stat-val.red { color: var(--red); }
+.rc-stat-val.green { color: var(--green); }
+
+/* ── Map area ── */
+.map-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #0a1520;
+}
+canvas#cityMap {
+  position: absolute;
+  top: 0; left: 0;
+  cursor: crosshair;
+}
+.map-overlay {
+  position: absolute;
+  top: 12px; right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 5;
+}
+.map-legend {
+  background: rgba(13,27,42,0.9);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 11px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  color: var(--muted);
+}
+.legend-item:last-child { margin-bottom: 0; }
+.legend-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.map-mode-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mode-btn {
+  background: rgba(13,27,42,0.9);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.mode-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+.mode-btn.active { border-color: var(--red); color: var(--red); }
+
+/* ── Status bar ── */
+.status-bar {
+  height: 28px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  gap: 24px;
+  flex-shrink: 0;
+}
+.status-item {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.status-item span { color: var(--text); }
+.status-item.pulse span { color: var(--red); animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 13px;
+  opacity: 0;
+  transition: all 0.3s;
+  pointer-events: none;
+  z-index: 999;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+      <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+    </svg>
+    EMERGENCY DISPATCH ROUTER
+  </div>
+  <div class="header-tags">
+    <span class="tag active">A* SEARCH</span>
+    <span class="tag active">BFS</span>
+    <span class="tag">ISLAMABAD GRID</span>
+  </div>
+</header>
+
+<div class="workspace">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="section-label">Mode</div>
+      <div style="display:flex;gap:6px;margin-bottom:0;">
+        <button class="mode-btn active" id="modeEmergency" onclick="setMode('emergency')" style="flex:1">📍 Emergency</button>
+        <button class="mode-btn" id="modeBlock" onclick="setMode('block')" style="flex:1">🚧 Block Road</button>
+        <button class="mode-btn" id="modeClear" onclick="clearBlocked()" style="flex:1">✕ Clear</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-label">Emergency Node</div>
+      <div class="control-row">
+        <label>Selected node (click map or type)</label>
+        <input type="number" id="emergencyInput" min="0" max="99" value="50" onchange="setEmergencyById(this.value)">
+      </div>
+      <div class="section-label" style="margin-top:8px">Blocked Roads</div>
+      <div class="blocked-list" id="blockedList">None</div>
+    </div>
+
+    <div class="sidebar-section">
+      <button class="btn-dispatch" id="dispatchBtn" onclick="dispatch()">⚡ DISPATCH AMBULANCE</button>
+    </div>
+
+    <div class="results-panel" id="resultsPanel">
+      <div style="color:var(--muted);font-size:12px;text-align:center;margin-top:20px;">
+        Click a node on the map to set emergency location, then dispatch.
+      </div>
+    </div>
+  </div>
+
+  <!-- Map -->
+  <div class="map-area" id="mapArea">
+    <canvas id="cityMap"></canvas>
+
+    <div class="map-overlay">
+      <div class="map-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#E63946"></div>Emergency</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#F4A261"></div>Hospital</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#2A9D8F"></div>Best route</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#457B9D"></div>BFS explored</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#6b7a8d"></div>Road</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="status-item">Nodes: <span>100</span></div>
+  <div class="status-item" id="statusEmergency">Emergency: <span>Node 50</span></div>
+  <div class="status-item" id="statusBlocked">Blocked: <span>0 roads</span></div>
+  <div class="status-item" id="statusRoute" style="display:none">Best route: <span id="routeInfo">—</span></div>
+  <div class="status-item pulse" id="statusLive" style="display:none">● <span>LIVE</span></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const canvas = document.getElementById('cityMap');
+const ctx = canvas.getContext('2d');
+const mapArea = document.getElementById('mapArea');
+
+let mapData = null;
+let nodePositions = {};  // node id → {x, y}
+let emergencyNode = 50;
+let blockedNodes = new Set();
+let mode = 'emergency';
+let lastResult = null;
+let selectedResultIdx = 0;
+let animFrame = 0;
+let animTimer = null;
+
+// ── Resize canvas ─────────────────────────────────────────────────────────
+function resizeCanvas() {
+  canvas.width  = mapArea.clientWidth;
+  canvas.height = mapArea.clientHeight;
+  computePositions();
+  draw();
+}
+
+function computePositions() {
+  if (!mapData) return;
+  const nodes = mapData.nodes;
+  const lats  = nodes.map(n => n.lat);
+  const lons  = nodes.map(n => n.lon);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+  const pad = 50;
+  const W = canvas.width - pad*2;
+  const H = canvas.height - pad*2;
+  nodePositions = {};
+  for (const n of nodes) {
+    nodePositions[n.id] = {
+      x: pad + (n.lon - minLon) / (maxLon - minLon) * W,
+      y: pad + (1 - (n.lat - minLat) / (maxLat - minLat)) * H
+    };
+  }
+}
+
+// ── Draw ──────────────────────────────────────────────────────────────────
+function draw() {
+  if (!mapData) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Edges
+  const edgeSet = new Set();
+  if (lastResult) {
+    const bfsNodes = new Set(lastResult.bfs_order || []);
+    for (const e of mapData.edges) {
+      const key = Math.min(e.from,e.to)+','+Math.max(e.from,e.to);
+      if (edgeSet.has(key)) continue;
+      edgeSet.add(key);
+      const a = nodePositions[e.from], b = nodePositions[e.to];
+      if (!a || !b) continue;
+      const explored = bfsNodes.has(e.from) && bfsNodes.has(e.to);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = explored ? 'rgba(69,123,157,0.35)' : 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = explored ? 1.5 : 1;
+      ctx.stroke();
+    }
+  } else {
+    for (const e of mapData.edges) {
+      const key = Math.min(e.from,e.to)+','+Math.max(e.from,e.to);
+      if (edgeSet.has(key)) continue;
+      edgeSet.add(key);
+      const a = nodePositions[e.from], b = nodePositions[e.to];
+      if (!a||!b) continue;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+
+  // Best path
+  if (lastResult && lastResult.results && lastResult.results[selectedResultIdx]) {
+    const path = lastResult.results[selectedResultIdx].path;
+    if (path.length > 1) {
+      // Glow
+      ctx.beginPath();
+      for (let i = 0; i < path.length; i++) {
+        const p = nodePositions[path[i]];
+        if (!p) continue;
+        i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
+      }
+      ctx.strokeStyle = 'rgba(42,157,143,0.25)';
+      ctx.lineWidth = 10;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      // Main line
+      ctx.beginPath();
+      for (let i = 0; i < path.length; i++) {
+        const p = nodePositions[path[i]];
+        if (!p) continue;
+        i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
+      }
+      ctx.strokeStyle = '#2A9D8F';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Animated pulse dot
+      const t  = (animFrame % 60) / 60;
+      const idx = Math.floor(t * (path.length - 1));
+      const pp = nodePositions[path[idx]];
+      if (pp) {
+        ctx.beginPath();
+        ctx.arc(pp.x, pp.y, 6, 0, Math.PI*2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+      }
+    }
+  }
+
+  // Nodes
+  for (const n of mapData.nodes) {
+    const p = nodePositions[n.id];
+    if (!p) continue;
+    const isHosp   = mapData.hospitals.some(h => h.id === n.id);
+    const isEmerg  = n.id === emergencyNode;
+    const isBlock  = blockedNodes.has(n.id);
+
+    if (isEmerg) {
+      // Pulsing ring
+      const pulse = Math.sin(animFrame * 0.08) * 4 + 12;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, pulse, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(230,57,70,0.2)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 8, 0, Math.PI*2);
+      ctx.fillStyle = '#E63946';
+      ctx.fill();
+      ctx.font = 'bold 12px Space Mono';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('!', p.x, p.y);
+    } else if (isHosp) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 9, 0, Math.PI*2);
+      ctx.fillStyle = '#F4A261';
+      ctx.fill();
+      ctx.font = 'bold 10px DM Sans';
+      ctx.fillStyle = '#0d1b2a';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('H', p.x, p.y);
+    } else if (isBlock) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 5, 0, Math.PI*2);
+      ctx.fillStyle = '#F4A261';
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(107,122,141,0.5)';
+      ctx.fill();
+    }
+  }
+
+  // Hospital labels
+  if (mapData.hospitals) {
+    for (const h of mapData.hospitals) {
+      const p = nodePositions[h.id];
+      if (!p) continue;
+      ctx.font = '10px DM Sans';
+      ctx.fillStyle = '#F4A261';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(h.name, p.x, p.y + 12);
+    }
+  }
+
+  animFrame++;
+}
+
+function animate() {
+  draw();
+  animTimer = requestAnimationFrame(animate);
+}
+
+// ── Click on canvas ───────────────────────────────────────────────────────
+canvas.addEventListener('click', e => {
+  if (!mapData) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  let closest = null, minD = Infinity;
+  for (const n of mapData.nodes) {
+    const p = nodePositions[n.id];
+    const d = Math.hypot(p.x - mx, p.y - my);
+    if (d < minD) { minD = d; closest = n.id; }
+  }
+  if (closest === null || minD > 30) return;
+
+  if (mode === 'emergency') {
+    emergencyNode = closest;
+    document.getElementById('emergencyInput').value = closest;
+    document.getElementById('statusEmergency').innerHTML = `Emergency: <span>Node ${closest}</span>`;
+    lastResult = null;
+    selectedResultIdx = 0;
+    document.getElementById('resultsPanel').innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;margin-top:20px;">Click dispatch to route ambulance.</div>';
+  } else if (mode === 'block') {
+    if (mapData.hospitals.some(h => h.id === closest) || closest === emergencyNode) {
+      showToast('Cannot block hospitals or emergency node');
+      return;
+    }
+    if (blockedNodes.has(closest)) blockedNodes.delete(closest);
+    else blockedNodes.add(closest);
+    updateBlockedUI();
+  }
+});
+
+function updateBlockedUI() {
+  const el = document.getElementById('blockedList');
+  const sb = document.getElementById('statusBlocked');
+  if (blockedNodes.size === 0) {
+    el.textContent = 'None';
+  } else {
+    el.textContent = 'Nodes: ' + [...blockedNodes].join(', ');
+  }
+  sb.innerHTML = `Blocked: <span>${blockedNodes.size} nodes</span>`;
+}
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('modeEmergency').classList.toggle('active', m==='emergency');
+  document.getElementById('modeBlock').classList.toggle('active', m==='block');
+}
+
+function clearBlocked() {
+  blockedNodes.clear();
+  updateBlockedUI();
+  showToast('Blocked roads cleared');
+}
+
+function setEmergencyById(val) {
+  const id = parseInt(val);
+  if (isNaN(id) || id < 0 || id > 99) return;
+  emergencyNode = id;
+  document.getElementById('statusEmergency').innerHTML = `Emergency: <span>Node ${id}</span>`;
+  lastResult = null;
+}
+
+// ── Dispatch ──────────────────────────────────────────────────────────────
+async function dispatch() {
+  const btn = document.getElementById('dispatchBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ ROUTING...';
+  document.getElementById('statusLive').style.display = 'block';
+
+  try {
+    const res = await fetch('/api/dispatch', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ emergency_node: emergencyNode, blocked: [...blockedNodes] })
+    });
+    lastResult = await res.json();
+    selectedResultIdx = 0;
+    renderResults();
+    updateRouteStatus();
+  } catch(err) {
+    showToast('Error: ' + err.message);
+  }
+
+  btn.disabled = false;
+  btn.textContent = '⚡ DISPATCH AMBULANCE';
+  setTimeout(() => document.getElementById('statusLive').style.display = 'none', 3000);
+}
+
+function renderResults() {
+  const panel = document.getElementById('resultsPanel');
+  if (!lastResult || !lastResult.results || lastResult.results.length === 0) {
+    panel.innerHTML = '<div style="color:var(--red);font-size:12px;text-align:center;margin-top:20px;">No reachable hospitals found.</div>';
+    return;
+  }
+  let html = `<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px;">
+    BFS explored ${lastResult.bfs_order.length} nodes · ${lastResult.results.length} hospitals reachable
+  </div>`;
+  lastResult.results.forEach((r, i) => {
+    html += `<div class="result-card ${i===0?'best':''} ${i===selectedResultIdx?'selected':''}" onclick="selectResult(${i})">
+      <div class="rc-header">
+        <div class="rc-name">${r.hospital_name}</div>
+        <div class="rc-badge">NEAREST</div>
+      </div>
+      <div class="rc-stats">
+        <div class="rc-stat">
+          <div class="rc-stat-label">Distance</div>
+          <div class="rc-stat-val ${i===0?'green':'red'}">${(r.cost_m/1000).toFixed(2)} km</div>
+        </div>
+        <div class="rc-stat">
+          <div class="rc-stat-label">ETA</div>
+          <div class="rc-stat-val ${i===0?'green':'red'}">${r.cost_min} min</div>
+        </div>
+        <div class="rc-stat">
+          <div class="rc-stat-label">Path nodes</div>
+          <div class="rc-stat-val">${r.path.length}</div>
+        </div>
+        <div class="rc-stat">
+          <div class="rc-stat-label">A* explored</div>
+          <div class="rc-stat-val">${r.astar_explored.length}</div>
+        </div>
+      </div>
+    </div>`;
+  });
+  panel.innerHTML = html;
+}
+
+function selectResult(i) {
+  selectedResultIdx = i;
+  renderResults();
+  updateRouteStatus();
+}
+
+function updateRouteStatus() {
+  if (!lastResult || !lastResult.results) return;
+  const r = lastResult.results[selectedResultIdx];
+  if (!r) return;
+  document.getElementById('statusRoute').style.display = 'block';
+  document.getElementById('routeInfo').textContent = `${r.hospital_name} · ${(r.cost_m/1000).toFixed(2)} km · ${r.cost_min} min`;
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+async function init() {
+  const res = await fetch('/api/map_data');
+  mapData = await res.json();
+  resizeCanvas();
+  animate();
+}
+
+window.addEventListener('resize', resizeCanvas);
+init();
+</script>
+</body>
+</html>
